@@ -4,6 +4,7 @@ from collections import OrderedDict
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def save_network(network, name, epoch_label):
@@ -41,8 +42,8 @@ class Logger(object):
     def __init__(self, model_name):
         self.model_name = model_name
         self.fig = plt.figure()
-        self.ax0 = self.fig.add_subplot(121, title="loss")
-        self.ax1 = self.fig.add_subplot(122, title="top1err")
+        self.ax0 = self.fig.add_subplot(211, title="Loss")
+        self.ax1 = self.fig.add_subplot(212, title="Top1 error")
         self.x_epoch = []
         self.y_loss = {}
         self.y_loss['train'] = []
@@ -53,14 +54,26 @@ class Logger(object):
 
     def save_curve(self):
         # Draw the loss cruve
-        self.ax0.plot(self.x_epoch, self.y_loss['train'], 'bo-', label='train')
-        self.ax0.plot(self.x_epoch, self.y_loss['val'], 'ro-', label='val')
-        self.ax1.plot(self.x_epoch, self.y_err['train'], 'bo-', label='train')
-        self.ax1.plot(self.x_epoch, self.y_err['val'], 'ro-', label='val')
+        self.y_err['train'] = np.array(self.y_err['train'])
+        self.y_err['val'] = np.array(self.y_err['val'])
+        self.y_err['train'] *= 100
+        self.y_err['val'] *= 100
 
-        if len(self.x_epoch) == 1:
-            self.ax0.legend()
-            self.ax1.legend()
+        self.ax0.plot(
+            self.x_epoch, self.y_loss['train'], 'bs-', markersize='4', label='train')
+        self.ax0.plot(
+            self.x_epoch, self.y_loss['val'], 'rs-', markersize='4', abel='val')
+        self.ax0.set_xlabel('Epoch')
+        self.ax0.set_ylabel('Loss')
+        self.ax0.legend()
+
+        self.ax1.plot(
+            self.x_epoch, self.y_err['train'], 'bs-', markersize='4', label='train')
+        self.ax1.plot(
+            self.x_epoch, self.y_err['val'], 'rs-', markersize='4', label='val')
+        self.ax1.set_xlabel('Epoch')
+        self.ax1.set_ylabel('Top1 error(%)')
+        self.ax1.legend()
 
         save_path = os.path.join('./model', self.model_name, 'train_log.jpg')
         self.fig.savefig(save_path)

@@ -62,7 +62,7 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
         print('Epoch {}/{}'.format(epoch + 1, num_epochs))
         print('-' * 10)
 
-        logger.x_epoch.append(epoch)
+        logger.x_epoch.append(epoch + 1)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
