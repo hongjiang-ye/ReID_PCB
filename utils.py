@@ -62,7 +62,7 @@ class Logger(object):
         self.ax0.plot(
             self.x_epoch, self.y_loss['train'], 'bs-', markersize='4', label='train')
         self.ax0.plot(
-            self.x_epoch, self.y_loss['val'], 'rs-', markersize='4', abel='val')
+            self.x_epoch, self.y_loss['val'], 'rs-', markersize='4', label='val')
         self.ax0.set_xlabel('Epoch')
         self.ax0.set_ylabel('Loss')
         self.ax0.legend()
