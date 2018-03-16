@@ -17,7 +17,7 @@ from utils import save_network, Logger
 
 
 ######################################################################
-# Options
+# Settings
 # --------
 
 parser = argparse.ArgumentParser(description='Training arguments')
@@ -27,12 +27,19 @@ parser.add_argument('--data_dir', default='/home/share/hongjiang/Market-1501-v15
                     type=str, help='Training dataset path')
 parser.add_argument('--train_all', action='store_true',
                     help='Use all training data. Set true when training the final model.')
+
+# Hyperparameters
+parser.add_argument('--seed', default=1, type=int, help='random seed')
 parser.add_argument('--batch_size', default=32, type=int, help='batch_size')
 parser.add_argument('--learning_rate', default=0.1, type=float,
                     help='FC params learning rate')
-parser.add_argument('--epochs', default=60, type=int, help='Training epochs')
+parser.add_argument('--epochs', default=60, type=int,
+                    help='The number of epochs to train')
 arg = parser.parse_args()
 
+
+torch.manual_seed(arg.seed)
+torch.cuda.manual_seed_all(arg.seed)
 
 ######################################################################
 # Training and logging functions
