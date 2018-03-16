@@ -59,9 +59,8 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
     best_acc = 0.0
 
     for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch + 1, num_epochs))
-        print('-' * 10)
 
+        logger.info('Epoch {}/{}'.format(epoch + 1, num_epochs))
         logger.x_epoch.append(epoch + 1)
 
         # Each epoch has a training and validation phase
@@ -100,13 +99,13 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
                 num_corrects = torch.sum(preds == labels.data)
                 running_corrects += num_corrects
-                # print('Epoch {} {}/Batch {}: Loss: {:.4f} Acc: {:.4f}'.format(
+                # logger.info('Epoch {} {}/Batch {}: Loss: {:.4f} Acc: {:.4f}'.format(
                 #     epoch + 1, phase, i + 1, loss.data[0] / arg.batch_size, num_corrects / arg.batch_size))
 
             epoch_loss = running_loss / len(image_datasets[phase])
             epoch_acc = running_corrects / len(image_datasets[phase])
 
-            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+            logger.info('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
             # Save result to logger
@@ -122,13 +121,15 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
         if epoch % 10 == 9:
             save_network(model, arg.name, epoch)
 
-        # Save the loss curve
-        logger.save_curve()
+        logger.info('-' * 10)
+
+    # Save the loss curve
+    logger.save_curve()
 
     time_elapsed = time.time() - start_time
-    print('Training complete in {:.0f}m {:.0f}s'.format(
+    logger.info('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc: {:4f}'.format(best_acc))
+    logger.info('Best val Acc: {:4f}'.format(best_acc))
 
     # Save best model weights
     model.load_state_dict(best_model_state)
