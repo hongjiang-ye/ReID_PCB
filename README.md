@@ -8,7 +8,7 @@ Using Python3.6 and Pytorch.
 
 ### Dataset Preparation
 
-Support [Market1501 Dataset][http://www.liangzheng.org/Project/project_reid.html]. Change the dataset path at `prepare.py` and use
+Support Market1501 and DukeMTMC-reID Dataset. Change the dataset path at `prepare.py` such as '/Users/ruby/Downloads/Market-1501-v15.09.15' and use
 
 ```python
 python prepare.py
@@ -42,9 +42,15 @@ The code loads the trained model and extracts the features of testing data. CMC(
 
 ## Result
 
-Using the default settings (remember to add `--train_all`, I train and test on Market1501 dataset and the results are:
+Using the default settings (remember to add `--train_all`), the results are:
 
-**Top1: 90.77, Top5: 96.35, Top10: 97.56, mAP: 75.45**
+* Market1501: **Top1: 90.77, Top5: 96.35, Top10: 97.56, mAP: 75.45**
+
+  (paper: Top1: 92.4, Top5: 97.0, Top10: 97.9, mAP: 77.3)
+
+DukeMTMC-reID: **Top1: 80.75, Top5: 89.41, Top10: 92.10, mAP: 66.63**
+
+（paper: top1: 81.9, top5: 89.4, top10: 91.6, mAP: 65.3）
 
 Maybe there are some differences between my implementation and the paper's, which are not detailed.
 
