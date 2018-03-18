@@ -11,6 +11,8 @@ class PCBModel(nn.Module):
         super(PCBModel, self).__init__()
         self.num_stripes = num_stripes
         self.num_classes = num_classes
+        self.features_G = []
+        self.features_H = []
 
         resnet = models.resnet50(pretrained=True)
         # Modifiy the stride of last conv layer
@@ -45,7 +47,6 @@ class PCBModel(nn.Module):
             self.fc_list.append(fc)
 
     def forward(self, x):
-        batch_num = x.size(0)
         features = self.backbone(x)
 
         # [N, C, H, W]
@@ -58,28 +59,10 @@ class PCBModel(nn.Module):
         self.features_H = self.local_conv(self.features_G)
 
         # H=S * [N, num_classes]
-        logits_list = []
+        predicitions_list = []
         for i in range(self.num_stripes):
             local_feature = self.features_H[:, :, i, :].contiguous()
             local_feature = local_feature.view(local_feature.size(0), -1)
-            logits_list.append(self.fc_list[i](local_feature))
-        # self.features_H_list = [(self.features_H[x, :, :, :]).squeeze()
-        # for x in range(batch_num)]
+            predicitions_list.append(self.fc_list[i](local_feature))
 
-        # Using transpose
-        # # [N, H=S, C=256]
-        # self.column_vectors_H = torch.transpose(
-        #     self.features_H.squeeze(), 1, 2)
-
-        # # [H=S, N, C=256], so the column vectors of the same stripe can compute fc together
-        # self.stripe_features = torch.transpose(self.column_vectors_H, 0, 1)
-
-        # # [N, H=S C=num_classes]
-        # self.predictions = torch.transpose(
-        #     torch.stack([self.fc_list[x](self.stripe_features[x, :, :])
-        #                  for x in range(self.num_stripes)]),
-        #     0, 1)
-        ##################
-
-        # return self.predictions
-        return logits_list
+        return predicitions_list
