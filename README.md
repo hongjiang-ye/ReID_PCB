@@ -1,4 +1,6 @@
-# ReID_baseline
+# ReID_PCB
+
+Implementation of PCB model of paper: *Beyond Part Models: Person Retrieval with Refined Part Pooling.*
 
 Using Python3.6 and Pytorch.
 
@@ -24,6 +26,10 @@ python train.py
 
 The code will save the trained model at `./model`.
 
+![train_log](https://i.loli.net/2018/03/18/5aadfe782bed6.jpg)
+
+Using the hyperparameters from the paper, the loss converage at around 30th epoch. 
+
 ### Test
 
 Set the hyperparameters in the same way.
@@ -36,7 +42,9 @@ The code loads the trained model and extracts the features of testing data. CMC(
 
 ## Result
 
-Using the default settings (remember to add `--train_all`, we got:
+Using the default settings (remember to add `--train_all`, I train and test on Market1501 dataset and the results are:
 
-**Top1: 89.81, Top5: 96.08, Top10: 97.44, mAP: 74.66**
+**Top1: 90.77, Top5: 96.35, Top10: 97.56, mAP: 75.45**
+
+Maybe there are some differences between my implementation and the paper's, which are not detailed.
 
