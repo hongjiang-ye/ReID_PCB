@@ -73,7 +73,9 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
             running_loss = 0.0
             running_corrects = 0
 
+            batch_num = 0
             for data in dataloaders[phase]:
+                batch_num += 1
 
                 input, label = data
 
@@ -99,7 +101,7 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
                 running_loss += loss.data[0]
 
-            epoch_loss = running_loss / len(image_datasets[phase])
+            epoch_loss = running_loss / batch_num
 
             logger.info('{} Loss: {:.4f}'.format(phase, epoch_loss))
 
