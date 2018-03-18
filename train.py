@@ -28,7 +28,7 @@ parser.add_argument('--train_all', action='store_true',
 
 # Hyperparameters
 parser.add_argument('--seed', default=1, type=int, help='random seed')
-parser.add_argument('--batch_size', default=32, type=int, help='batch_size')
+parser.add_argument('--batch_size', default=64, type=int, help='batch_size')
 parser.add_argument('--learning_rate', default=0.1, type=float,
                     help='FC params learning rate')
 parser.add_argument('--epochs', default=60, type=int,
@@ -88,10 +88,6 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
                 output = model(input)
 
                 # Compute PCB loss
-                # loss = torch.sum(
-                #     torch.cat([criterion(output[:, x, :], label)
-                #                for x in range(output.size(1))])
-                # )
                 loss = torch.sum(
                     torch.cat([criterion(feat, label) for feat in output]))
                 # loss = criterion(output, label)
@@ -122,7 +118,6 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
     time_elapsed = time.time() - start_time
     logger.info('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-    logger.info('Best val Acc: {:4f}'.format(best_acc))
 
     # Save final model weights
     model.load_state_dict(last_model_state)

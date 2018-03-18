@@ -59,7 +59,6 @@ def extract_feature(model, dataloaders):
 
     model.eval()
 
-    # features = torch.FloatTensor()
     features = []
 
     for data in dataloaders:
@@ -75,13 +74,9 @@ def extract_feature(model, dataloaders):
         feature = model.features_H.data.cpu().numpy()
 
         # [N, C*H]
-        # feature = feature.view(feature.size(0), -1)
         feature = feature.reshape(len(feature), -1)
 
         # norm feature
-        # fnorm = torch.norm(feature, p=2, dim=1, keepdim=True)
-        # feature = feature.div(fnorm.expand_as(feature))
-        # features = feature
         fnorm = np.linalg.norm(feature, axis=1)
         feature = np.divide(feature, fnorm.reshape(len(fnorm), 1))
         features.append(feature)
@@ -176,10 +171,6 @@ model = load_network(model_structure, MODEL_NAME, arg.which_epoch)
 # Remove the final fc layer and classifier layer
 for i in range(len(model.fc_list)):
     model.fc_list[i] = nn.Sequential()
-# model.classifier = nn.Sequential()
-
-if torch.cuda.device_count() > 1:
-    model = nn.DataParallel(model)
 
 # Change to test mode
 model = model.eval()
