@@ -203,7 +203,7 @@ optimizer = optim.SGD([
     {'params': model.fc_list.parameters(), 'lr': arg.learning_rate}
 ], momentum=0.9, weight_decay=5e-4, nesterov=True)
 
-scheduler = lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.1)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
 
 ######################################################################
