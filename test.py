@@ -9,7 +9,7 @@ from torch.autograd import Variable
 from torchvision import datasets, transforms
 from sklearn.metrics import average_precision_score
 
-from model import ft_net
+from model import PCBModel
 from utils import load_network
 
 
@@ -18,15 +18,15 @@ from utils import load_network
 # --------
 
 parser = argparse.ArgumentParser(description='Testing arguments')
-parser.add_argument('--which_epoch', default='best',
-                    type=str, help='0,1,2,3...or last')
+parser.add_argument('--which_epoch', default='final',
+                    type=str, help='0,1,2,3...or final')
 parser.add_argument('--test_dir', default='/home/share/hongjiang/Market-1501-v15.09.15/pytorch',
                     type=str, help='./test_data')
-parser.add_argument('--name', default='ft_ResNet50',
-                    type=str, help='Saved model name')
-parser.add_argument('--batch_size', default=64, type=int, help='batchsize')
+parser.add_argument('--batch_size', default=32, type=int, help='batchsize')
 
 arg = parser.parse_args()
+
+MODEL_NAME = 'PCB'
 
 
 ######################################################################
@@ -57,29 +57,38 @@ def fliplr(img):
 
 def extract_feature(model, dataloaders):
 
-    features = torch.FloatTensor()
+    model.eval()
+
+    # features = torch.FloatTensor()
+    features = []
 
     for data in dataloaders:
         img, _ = data
 
-        feature = torch.FloatTensor(img.size(0), 2048).zero_()
-        for i in range(2):
-            if i == 1:
-                img = fliplr(img)
-            if USE_GPU:
-                input_img = Variable(img.cuda())
-            else:
-                input_img = Variable(img)
+        if USE_GPU:
+            input_img = Variable(img.cuda())
+        else:
+            input_img = Variable(img)
 
-            outputs = model(input_img)
-            feature += outputs.data.cpu()
+        output = model(input_img)
+        # [N, C, H=S, W=1]
+        feature = model.features_H.data.cpu().numpy()
+
+        # [N, C*H]
+        # feature = feature.view(feature.size(0), -1)
+        feature = feature.reshape(len(feature), -1)
 
         # norm feature
-        fnorm = torch.norm(feature, p=2, dim=1, keepdim=True)
-        feature = feature.div(fnorm.expand_as(feature))
-        features = torch.cat((features, feature), 0)
+        # fnorm = torch.norm(feature, p=2, dim=1, keepdim=True)
+        # feature = feature.div(fnorm.expand_as(feature))
+        # features = feature
+        fnorm = np.linalg.norm(feature, axis=1)
+        feature = np.divide(feature, fnorm.reshape(len(fnorm), 1))
+        features.append(feature)
 
-    return np.array(features)
+    features = np.vstack(features)
+
+    return features
 
 
 #######################################################################
@@ -161,12 +170,13 @@ query_path = image_datasets['query'].imgs
 gallery_cams, gallery_labels = get_id(gallery_path)
 query_cams, query_labels = get_id(query_path)
 
-model_structure = ft_net(751)
-model = load_network(model_structure, arg.name, arg.which_epoch)
+model_structure = PCBModel(751)
+model = load_network(model_structure, MODEL_NAME, arg.which_epoch)
 
 # Remove the final fc layer and classifier layer
-model.model.fc = nn.Sequential()
-model.classifier = nn.Sequential()
+for i in range(len(model.fc_list)):
+    model.fc_list[i] = nn.Sequential()
+# model.classifier = nn.Sequential()
 
 if torch.cuda.device_count() > 1:
     model = nn.DataParallel(model)

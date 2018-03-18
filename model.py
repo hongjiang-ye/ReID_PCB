@@ -1,100 +1,85 @@
+from torchvision import models
 import torch
 import torch.nn as nn
-from torch.nn import init
-from torchvision import models
-from torch.autograd import Variable
+import torch.nn.functional as F
+import numpy as np
 
-######################################################################
-def weights_init_kaiming(m):
-    classname = m.__class__.__name__
-    # print(classname)
-    if classname.find('Conv') != -1:
-        init.kaiming_normal(m.weight.data, a=0, mode='fan_in')
-    elif classname.find('Linear') != -1:
-        init.kaiming_normal(m.weight.data, a=0, mode='fan_out')
-        init.constant(m.bias.data, 0.0)
-    elif classname.find('BatchNorm1d') != -1:
-        init.normal(m.weight.data, 1.0, 0.02)
-        init.constant(m.bias.data, 0.0)
 
-def weights_init_classifier(m):
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        init.normal(m.weight.data, std=0.001)
-        init.constant(m.bias.data, 0.0)
+class PCBModel(nn.Module):
+    def __init__(self, num_classes, num_stripes=6, local_conv_out_channels=256):
 
-class ft_net(nn.Module):
+        super(PCBModel, self).__init__()
+        self.num_stripes = num_stripes
+        self.num_classes = num_classes
 
-    def __init__(self, class_num ):
-        super().__init__()
-        model_ft = models.resnet50(pretrained=True)
+        resnet = models.resnet50(pretrained=True)
+        # Modifiy the stride of last conv layer
+        resnet.layer4[0].conv2 = nn.Conv2d(
+            512, 512, kernel_size=3, bias=False, stride=1, padding=1)
+        resnet.layer4[0].downsample = nn.Sequential(
+            nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(2048))
 
-        # avg pooling to global pooling
-        model_ft.avgpool = nn.AdaptiveAvgPool2d((1,1))
+        # Remove avgpool and fc layer of resnet
+        modules = list(resnet.children())[:-2]
+        self.backbone = nn.Sequential(*modules)
 
-        num_ftrs = model_ft.fc.in_features
-        add_block = []
-        num_bottleneck = 512
-        add_block += [nn.Linear(num_ftrs, num_bottleneck)]
-        add_block += [nn.BatchNorm1d(num_bottleneck)]
-        add_block += [nn.LeakyReLU(0.1)]
-        add_block += [nn.Dropout(p=0.5)]  #default dropout rate 0.5
-        #transforms.CenterCrop(224),
-        add_block = nn.Sequential(*add_block)
-        add_block.apply(weights_init_kaiming)
-        model_ft.fc = add_block
-        self.model = model_ft
+        # Add new layers
+        self.avgpool = nn.AdaptiveAvgPool2d((self.num_stripes, 1))
+        self.local_conv = nn.Sequential(
+            nn.Conv2d(2048, local_conv_out_channels, 1),
+            nn.BatchNorm2d(local_conv_out_channels),
+            nn.ReLU(inplace=True))
 
-        classifier = []
-        classifier += [nn.Linear(num_bottleneck, class_num)]
-        classifier = nn.Sequential(*classifier)
-        classifier.apply(weights_init_classifier)
-        self.classifier = classifier
+        # Classifier for each stripe
+        self.fc_list = nn.ModuleList()
+        for _ in range(num_stripes):
+            fc = nn.Sequential(
+                nn.Linear(local_conv_out_channels, num_classes))
+            # nn.Softmax())
+
+            # fc initialize
+            nn.init.normal(fc[0].weight, std=0.001)
+            nn.init.constant(fc[0].bias, 0)
+
+            self.fc_list.append(fc)
 
     def forward(self, x):
-        x = self.model(x)
-        x = self.classifier(x)
-        return x
+        batch_num = x.size(0)
+        features = self.backbone(x)
 
+        # [N, C, H, W]
+        assert features.size(
+            2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
 
-class ft_net_dense(nn.Module):
+        self.features_G = self.avgpool(features)
 
-    def __init__(self, class_num ):
-        super().__init__()
-        model_ft = models.densenet121(pretrained=True)
-        # add pooling to the model
-        # in the originial version, pooling is written in the forward function 
-        model_ft.features.avgpool = nn.AdaptiveAvgPool2d((1,1))
+        # [N, C=256, H=S, W=1]
+        self.features_H = self.local_conv(self.features_G)
 
-        add_block = []
-        num_bottleneck = 512
-        add_block += [nn.Linear(1024, num_bottleneck)]  #For ResNet, it is 2048
-        add_block += [nn.BatchNorm1d(num_bottleneck)]
-        add_block += [nn.LeakyReLU(0.1)]
-        add_block += [nn.Dropout(p=0.5)]
-        add_block = nn.Sequential(*add_block)
-        add_block.apply(weights_init_kaiming)
-        model_ft.fc = add_block
-        self.model = model_ft
+        # H=S * [N, num_classes]
+        logits_list = []
+        for i in range(self.num_stripes):
+            local_feature = self.features_H[:, :, i, :].contiguous()
+            local_feature = local_feature.view(local_feature.size(0), -1)
+            logits_list.append(self.fc_list[i](local_feature))
+        # self.features_H_list = [(self.features_H[x, :, :, :]).squeeze()
+        # for x in range(batch_num)]
 
-        classifier = []
-        classifier += [nn.Linear(num_bottleneck, class_num)]
-        classifier = nn.Sequential(*classifier)
-        classifier.apply(weights_init_classifier)
-        self.classifier = classifier
+        # Using transpose
+        # # [N, H=S, C=256]
+        # self.column_vectors_H = torch.transpose(
+        #     self.features_H.squeeze(), 1, 2)
 
-    def forward(self, x):
-        x = self.model.features(x)  
-        x = x.view(x.size(0),-1)
-        x = self.model.fc(x)
-        x = self.classifier(x)
-        return x
+        # # [H=S, N, C=256], so the column vectors of the same stripe can compute fc together
+        # self.stripe_features = torch.transpose(self.column_vectors_H, 0, 1)
 
-# debug model structure
-#net = ft_net(751)
-net = ft_net_dense(751)
-#print(net)
-input = Variable(torch.FloatTensor(8, 3, 224, 224))
-output = net(input)
-print('net output size:')
-print(output.shape)
+        # # [N, H=S C=num_classes]
+        # self.predictions = torch.transpose(
+        #     torch.stack([self.fc_list[x](self.stripe_features[x, :, :])
+        #                  for x in range(self.num_stripes)]),
+        #     0, 1)
+        ##################
+
+        # return self.predictions
+        return logits_list

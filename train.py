@@ -12,7 +12,7 @@ from torch.optim import lr_scheduler
 from torch.autograd import Variable
 from torchvision import datasets, transforms
 
-from model import ft_net
+from model import PCBModel
 from utils import save_network, Logger
 
 
@@ -21,8 +21,6 @@ from utils import save_network, Logger
 # --------
 
 parser = argparse.ArgumentParser(description='Training arguments')
-parser.add_argument('--name', default='ft_ResNet50',
-                    type=str, help='model name')
 parser.add_argument('--data_dir', default='/home/share/hongjiang/Market-1501-v15.09.15/pytorch',
                     type=str, help='Training dataset path')
 parser.add_argument('--train_all', action='store_true',
@@ -37,15 +35,16 @@ parser.add_argument('--epochs', default=60, type=int,
                     help='The number of epochs to train')
 arg = parser.parse_args()
 
-
 torch.manual_seed(arg.seed)
 torch.cuda.manual_seed_all(arg.seed)
+
 
 ######################################################################
 # Training and logging functions
 # --------
 
 USE_GPU = torch.cuda.is_available()
+MODEL_NAME = 'PCB'
 
 
 def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
@@ -53,7 +52,7 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
     start_time = time.time()
 
     # Logger instance
-    logger = Logger(arg.name)
+    logger = Logger(MODEL_NAME)
 
     best_model_state = model.state_dict()
     best_acc = 0.0
@@ -76,19 +75,26 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
             for data in dataloaders[phase]:
 
-                inputs, labels = data
+                input, label = data
 
                 if USE_GPU:
-                    inputs = Variable(inputs.cuda())
-                    labels = Variable(labels.cuda())
+                    input = Variable(input.cuda())
+                    label = Variable(label.cuda())
                 else:
-                    inputs, labels = Variable(inputs), Variable(labels)
+                    input, label = Variable(input), Variable(label)
 
                 optimizer.zero_grad()
 
-                outputs = model(inputs)
-                _, preds = torch.max(outputs.data, 1)
-                loss = criterion(outputs, labels)
+                output = model(input)
+
+                # Compute PCB loss
+                # loss = torch.sum(
+                #     torch.cat([criterion(output[:, x, :], label)
+                #                for x in range(output.size(1))])
+                # )
+                loss = torch.sum(
+                    torch.cat([criterion(feat, label) for feat in output]))
+                # loss = criterion(output, label)
 
                 # Backward only if in training phase
                 if phase == 'train':
@@ -97,29 +103,16 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
                 running_loss += loss.data[0]
 
-                num_corrects = torch.sum(preds == labels.data)
-                running_corrects += num_corrects
-                # logger.info('Epoch {} {}/Batch {}: Loss: {:.4f} Acc: {:.4f}'.format(
-                #     epoch + 1, phase, i + 1, loss.data[0] / arg.batch_size, num_corrects / arg.batch_size))
-
             epoch_loss = running_loss / len(image_datasets[phase])
-            epoch_acc = running_corrects / len(image_datasets[phase])
 
-            logger.info('{} Loss: {:.4f} Acc: {:.4f}'.format(
-                phase, epoch_loss, epoch_acc))
+            logger.info('{} Loss: {:.4f}'.format(phase, epoch_loss))
 
             # Save result to logger
             logger.y_loss[phase].append(epoch_loss)
-            logger.y_err[phase].append(1.0 - epoch_acc)
-
-        # Save the best model
-        if epoch_acc > best_acc:
-            best_acc = epoch_acc
-            best_model_state = model.state_dict()
 
         last_model_state = model.state_dict()
-        if epoch % 10 == 9:
-            save_network(model, arg.name, epoch)
+        if epoch % 20 == 19:
+            save_network(model, MODEL_NAME, epoch)
 
         logger.info('-' * 10)
 
@@ -131,13 +124,9 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
         time_elapsed // 60, time_elapsed % 60))
     logger.info('Best val Acc: {:4f}'.format(best_acc))
 
-    # Save best model weights
-    model.load_state_dict(best_model_state)
-    save_network(model, arg.name, 'best')
-
-    # Save last model weights
+    # Save final model weights
     model.load_state_dict(last_model_state)
-    save_network(model, arg.name, 'last')
+    save_network(model, MODEL_NAME, 'final')
     return model
 
 
@@ -147,7 +136,7 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
 if not os.path.isdir('./model'):
     os.mkdir('./model')
-    os.mkdir('./model/' + arg.name)
+    os.mkdir('./model/' + MODEL_NAME)
 
 
 ######################################################################
@@ -193,7 +182,7 @@ dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=arg.
 # Training settings
 # ----------------------
 
-model = ft_net(len(image_datasets['train'].classes))
+model = PCBModel(len(image_datasets['train'].classes))
 # print(model)
 
 # Use multiple GPUs
@@ -208,14 +197,10 @@ if USE_GPU:
 criterion = nn.CrossEntropyLoss()
 
 # Finetune the net
-ignored_params = list(map(id, model.model.fc.parameters())) + \
-    list(map(id, model.classifier.parameters()))
-base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
-
 optimizer = optim.SGD([
-    {'params': base_params, 'lr': arg.learning_rate / 10},
-    {'params': model.model.fc.parameters(), 'lr': arg.learning_rate},
-    {'params': model.classifier.parameters(), 'lr': arg.learning_rate}
+    {'params': model.backbone.parameters(), 'lr': arg.learning_rate / 10},
+    {'params': model.local_conv.parameters(), 'lr': arg.learning_rate},
+    {'params': model.fc_list.parameters(), 'lr': arg.learning_rate}
 ], momentum=0.9, weight_decay=5e-4, nesterov=True)
 
 scheduler = lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.1)

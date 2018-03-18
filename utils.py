@@ -43,12 +43,16 @@ class Logger(logging.Logger):
     Add functions to draw the training log curve.'''
 
     def __init__(self, model_name):
+        self.dir_path = os.path.join('./model', model_name)
+        if not os.path.isdir(self.dir_path):
+            os.mkdir(self.dir_path)
+
         super(Logger, self).__init__('Training logger')
 
         # Print logs to console and file
         self.model_name = model_name
         self.file_handler = logging.FileHandler(
-            os.path.join('./model', self.model_name, 'train_log.txt'))
+            os.path.join(self.dir_path, 'train_log.txt'))
         self.console_handler = logging.StreamHandler()
         self.log_format = logging.Formatter(
             "%(asctime)s %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
@@ -59,36 +63,22 @@ class Logger(logging.Logger):
 
         # Draw curve
         self.fig = plt.figure()
-        self.ax0 = self.fig.add_subplot(211)
-        self.ax1 = self.fig.add_subplot(212)
+        self.ax0 = self.fig.add_subplot(111)
         self.x_epoch = []
         self.y_loss = {}
         self.y_loss['train'] = []
         self.y_loss['val'] = []
-        self.y_err = {}
-        self.y_err['train'] = []
-        self.y_err['val'] = []
 
     def save_curve(self):
-        self.y_err['train'] = np.array(self.y_err['train'])
-        self.y_err['val'] = np.array(self.y_err['val'])
-        self.y_err['train'] *= 100
-        self.y_err['val'] *= 100
 
         self.ax0.plot(
-            self.x_epoch, self.y_loss['train'], 'bs-', markersize='4', label='train')
+            self.x_epoch, self.y_loss['train'], 'bs-', markersize='2', label='train')
         self.ax0.plot(
-            self.x_epoch, self.y_loss['val'], 'rs-', markersize='4', label='val')
+            self.x_epoch, self.y_loss['val'], 'rs-', markersize='2', label='val')
+        self.ax0.title('PCBModel')
         self.ax0.set_ylabel('Loss')
+        self.ax0.set_xlabel('Epoch')
         self.ax0.legend()
 
-        self.ax1.plot(
-            self.x_epoch, self.y_err['train'], 'bs-', markersize='4', label='train')
-        self.ax1.plot(
-            self.x_epoch, self.y_err['val'], 'rs-', markersize='4', label='val')
-        self.ax1.set_xlabel('Epoch')
-        self.ax1.set_ylabel('Top1 error(%)')
-        self.ax1.legend()
-
-        save_path = os.path.join('./model', self.model_name, 'train_log.jpg')
+        save_path = os.path.join(self.dir_path, 'train_log.jpg')
         self.fig.savefig(save_path)
