@@ -26,7 +26,7 @@ python train.py
 
 The code will save the trained model at `./model`.
 
-![train_log](https://i.loli.net/2018/03/18/5aadfe782bed6.jpg)
+![train_log](https://i.loli.net/2018/03/19/5aaf1664bae2b.jpg)
 
 Using the hyperparameters from the paper, the loss converage at around 30th epoch. 
 
@@ -44,13 +44,12 @@ The code loads the trained model and extracts the features of testing data. CMC(
 
 Using the default settings (remember to add `--train_all`), the results are:
 
-* Market1501: **Top1: 90.77, Top5: 96.35, Top10: 97.56, mAP: 75.45**
-
-  (paper: Top1: 92.4, Top5: 97.0, Top10: 97.9, mAP: 77.3)
-
-DukeMTMC-reID: **Top1: 80.75, Top5: 89.41, Top10: 92.10, mAP: 66.63**
-
-（paper: top1: 81.9, top5: 89.4, top10: 91.6, mAP: 65.3）
+|                        | Top1   | Top 5  | Top 10 | mAP    |
+| ---------------------- | ------ | ------ | ------ | ------ |
+| Market1501             | 90.77  | 96.35  | 97.56  | 75.45  |
+| *Market1501(Paper)*    | *92.4* | *97.0* | *97.9* | *77.3* |
+| DukeMTMC-reID          | 80.75  | 89.41  | 92.10  | 66.63  |
+| *DukeMTMC-reID(Paper)* | *81.9* | *89.4* | *91.6* | *65.3* |
 
 Maybe there are some differences between my implementation and the paper's, which are not detailed.
 
