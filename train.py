@@ -13,16 +13,13 @@ from torch.autograd import Variable
 from torchvision import datasets, transforms
 
 from model import PCBModel
-from utils import save_network, Logger
+from utils import *
 
 
-######################################################################
-# Settings
-# --------
-
+# ---------------------- Settings ----------------------
 parser = argparse.ArgumentParser(description='Training arguments')
-parser.add_argument('--data_dir', default='/home/share/hongjiang/Market-1501-v15.09.15/pytorch',
-                    type=str, help='Training dataset path')
+parser.add_argument('--dataset', type=str, default='market1501',
+                    choices=['market1501', 'cuhk03', 'duke'])
 parser.add_argument('--train_all', action='store_true',
                     help='Use all training data. Set true when training the final model.')
 
@@ -38,21 +35,19 @@ arg = parser.parse_args()
 torch.manual_seed(arg.seed)
 torch.cuda.manual_seed_all(arg.seed)
 
-
-######################################################################
-# Training and logging functions
-# --------
-
 USE_GPU = torch.cuda.is_available()
-MODEL_NAME = 'PCB'
+if not os.path.isdir('./model'):
+    os.mkdir('./model')
+    os.mkdir('./model/' + arg.dataset)
 
 
+# ---------------------- Train function ----------------------
 def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
     start_time = time.time()
 
     # Logger instance
-    logger = Logger(MODEL_NAME)
+    logger = Logger(arg.dataset)
 
     best_model_state = model.state_dict()
     best_acc = 0.0
@@ -110,7 +105,7 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
         last_model_state = model.state_dict()
         if epoch % 20 == 19:
-            save_network(model, MODEL_NAME, epoch)
+            save_network(model, arg.dataset, epoch)
 
         logger.info('-' * 10)
 
@@ -123,24 +118,11 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
 
     # Save final model weights
     model.load_state_dict(last_model_state)
-    save_network(model, MODEL_NAME, 'final')
+    save_network(model, arg.dataset, 'final')
     return model
 
 
-######################################################################
-# Make model directory
-# ---------
-
-if not os.path.isdir('./model'):
-    os.mkdir('./model')
-    os.mkdir('./model/' + MODEL_NAME)
-
-
-######################################################################
-# Set dataloaders
-# ---------
-
-
+# ---------------------- Set dataloaders ----------------------
 transform_train_list = [
     transforms.Resize(size=(384, 128), interpolation=3),
     transforms.RandomHorizontalFlip(),
@@ -161,9 +143,9 @@ data_transforms = {
 
 
 image_datasets = {}
-image_datasets['train'] = datasets.ImageFolder(os.path.join(arg.data_dir, 'train' + ('_all' if arg.train_all else '')),
+image_datasets['train'] = datasets.ImageFolder(os.path.join(DATASET_PATH[arg.dataset], 'train' + ('_all' if arg.train_all else '')),
                                                data_transforms['train'])
-image_datasets['val'] = datasets.ImageFolder(os.path.join(arg.data_dir, 'val'),
+image_datasets['val'] = datasets.ImageFolder(os.path.join(DATASET_PATH[arg.dataset], 'val'),
                                              data_transforms['val'])
 
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=arg.batch_size,
@@ -175,12 +157,8 @@ dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=arg.
 # inputs, classes = next(iter(dataloaders['train']))
 
 
-######################################################################
-# Training settings
-# ----------------------
-
+# ---------------------- Training settings ----------------------
 model = PCBModel(len(image_datasets['train'].classes))
-# print(model)
 
 # Use multiple GPUs
 if torch.cuda.device_count() > 1:
@@ -203,9 +181,6 @@ optimizer = optim.SGD([
 scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
 
-######################################################################
-# Start training
-# ----------------------
-
+# ---------------------- Start training ----------------------
 model = train(model_wraped, criterion, optimizer, scheduler, dataloaders,
               arg.epochs)

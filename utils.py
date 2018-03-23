@@ -8,6 +8,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+# ---------------------- Global settings ----------------------
+DATASET_PATH = {
+    'market1501': '/home/share/hongjiang/Market-1501-v15.09.15/pytorch',
+    'duke': '/home/share/hongjiang/DukeMTMC-reID/pytorch',
+    'cuhk03': '/home/share/hongjiang/cuhk03_release/pytorch'}
+TRAINING_IDS = {
+    'market1501': 751,
+    'duke': 702,
+    'cuhk03': 767}
+
+
+# ---------------------- Helper functions ----------------------
 def save_network(network, name, epoch_label):
     save_filename = 'net_%s.pth' % epoch_label
     save_path = os.path.join('./model', name, save_filename)
@@ -37,6 +49,7 @@ def load_network(network, name, epoch_label):
     return network
 
 
+# ---------------------- Logger ----------------------
 class Logger(logging.Logger):
     '''Inherit from logging.Logger.
     Print logs to console and file.

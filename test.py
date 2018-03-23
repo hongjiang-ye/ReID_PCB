@@ -10,30 +10,22 @@ from torchvision import datasets, transforms
 from sklearn.metrics import average_precision_score
 
 from model import PCBModel
-from utils import load_network
+from utils import *
 
 
-######################################################################
-# Options
-# --------
-
+# ---------------------- Settings ----------------------
 parser = argparse.ArgumentParser(description='Testing arguments')
 parser.add_argument('--which_epoch', default='final',
                     type=str, help='0,1,2,3...or final')
-parser.add_argument('--test_dir', default='/home/share/hongjiang/Market-1501-v15.09.15/pytorch',
-                    type=str, help='./test_data')
-parser.add_argument('--batch_size', default=32, type=int, help='batchsize')
+parser.add_argument('--dataset', type=str, default='market1501',
+                    choices=['market1501', 'cuhk03', 'duke'])
+parser.add_argument('--batch_size', default=64, type=int, help='batchsize')
 
 arg = parser.parse_args()
 
-MODEL_NAME = 'PCB'
 
-
-######################################################################
-# Functions
-# --------
-
-def get_id(img_path):
+# ---------------------- Extract features ----------------------
+def get_cam_label(img_path):
     camera_ids = []
     labels = []
     for path, _ in img_path:
@@ -48,6 +40,7 @@ def get_id(img_path):
     return np.array(camera_ids), np.array(labels)
 
 
+# Filp lr and average the features. Use in the future?
 def fliplr(img):
     # Create inverse index at dim 3(width)
     inv_idx = torch.arange(img.size(3) - 1, -1, -1).long()
@@ -56,11 +49,9 @@ def fliplr(img):
 
 
 def extract_feature(model, dataloaders):
-
     model.eval()
 
     features = []
-
     for data in dataloaders:
         img, _ = data
 
@@ -86,10 +77,7 @@ def extract_feature(model, dataloaders):
     return features
 
 
-#######################################################################
-# Evaluation
-# --------
-
+# ---------------------- Evaluation ----------------------
 def evaluate(query_features, query_labels, query_cams, gallery_features, gallery_labels, gallery_cams):
 
     CMC = torch.IntTensor(len(gallery_labels)).zero_()
@@ -141,17 +129,14 @@ def evaluate(query_features, query_labels, query_cams, gallery_features, gallery
     return CMC, mAP
 
 
-######################################################################
-# Main
-# ---------
-
+# ---------------------- Start testing ----------------------
 data_transforms = transforms.Compose([
     transforms.Resize((384, 128), interpolation=3),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-image_datasets = {x: datasets.ImageFolder(os.path.join(arg.test_dir, x), data_transforms)
+image_datasets = {x: datasets.ImageFolder(os.path.join(DATASET_PATH[arg.dataset], x), data_transforms)
                   for x in ['gallery', 'query']}
 dataloaders = {x: torch.utils.data.DataLoader(
     image_datasets[x], batch_size=arg.batch_size, shuffle=False, num_workers=4) for x in ['gallery', 'query']}
@@ -162,11 +147,11 @@ USE_GPU = torch.cuda.is_available()
 gallery_path = image_datasets['gallery'].imgs
 query_path = image_datasets['query'].imgs
 
-gallery_cams, gallery_labels = get_id(gallery_path)
-query_cams, query_labels = get_id(query_path)
+gallery_cams, gallery_labels = get_cam_label(gallery_path)
+query_cams, query_labels = get_cam_label(query_path)
 
-model_structure = PCBModel(751)
-model = load_network(model_structure, MODEL_NAME, arg.which_epoch)
+model_structure = PCBModel(TRAINING_IDS[arg.dataset])
+model = load_network(model_structure, arg.dataset, arg.which_epoch)
 
 # Remove the final fc layer and classifier layer
 for i in range(len(model.fc_list)):
