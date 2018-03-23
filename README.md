@@ -22,7 +22,7 @@ Please unzip the file and not change any of the directory names. Then change the
 python data_transform.py --dataset {market1501, duke, cuhk03}
 ```
 
-to transform the dataset to Pytorch API style. 
+to transform the dataset to Pytorch ImageFolder API style. 
 
 ### Train
 
@@ -34,7 +34,7 @@ python train.py --dataset {market1501, duke, cuhk03}
 
 The code will save the trained model at `./model/{dataset}`.
 
-![train_log](https://i.loli.net/2018/03/19/5aaf1664bae2b.jpg)
+![train_log](https://i.loli.net/2018/03/23/5ab4b6c101019.jpg)
 
 Using the hyperparameters from the paper, the loss converage at around 30th epoch. 
 
