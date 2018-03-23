@@ -20,6 +20,12 @@ def makeDir(path):
 
 
 def transform_market_duke(src_root_path, dst_root_path):
+    '''
+    Download market1501 dataset from "http://www.liangzheng.org/Project/project_reid.html".
+    Download duke dataset from "https://github.com/layumi/DukeMTMC-reID_evaluation"
+    Please unzip the file and not change any of the directory names.
+    Change the paths in utils.py to the unzipped directory path.
+    '''
 
     def transform_to_path(images_src_path, images_dst_path, make_val=False):
         makeDir(images_dst_path)
@@ -54,6 +60,13 @@ def transform_market_duke(src_root_path, dst_root_path):
 
 
 def transform_cuhk03(src_root_path, dst_root_path):
+    '''
+    Download cuhk03 dataset from "http://www.ee.cuhk.edu.hk/~xgwang/CUHK_identification.html".
+    Please unzip the file and not change any of the directory names.
+    Then download "cuhk03_new_protocol_config_detected.mat" from "https://github.com/zhunzhong07/person-re-ranking/tree/master/evaluation/data/CUHK03"
+    and put it with cuhk-03.mat. We meed this new protocol to split the dataset.
+    '''
+
     cuhk03 = h5py.File(os.path.join(src_root_path, 'cuhk-03.mat'))
     config = scipy.io.loadmat(os.path.join(
         src_root_path, 'cuhk03_new_protocol_config_detected.mat'))
