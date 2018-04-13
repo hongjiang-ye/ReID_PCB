@@ -19,7 +19,7 @@ parser.add_argument('--which_epoch', default='final',
                     type=str, help='0,1,2,3...or final')
 parser.add_argument('--dataset', type=str, default='market1501',
                     choices=['market1501', 'cuhk03', 'duke'])
-parser.add_argument('--batch_size', default=64, type=int, help='batchsize')
+parser.add_argument('--batch_size', default=128, type=int, help='batchsize')
 
 arg = parser.parse_args()
 
@@ -56,9 +56,9 @@ def extract_feature(model, dataloaders):
         img, _ = data
 
         if USE_GPU:
-            input_img = Variable(img.cuda())
+            input_img = Variable(img.cuda(), volatile=True)
         else:
-            input_img = Variable(img)
+            input_img = Variable(img, volatile=True)
 
         output = model(input_img)
         # [N, C, H=S, W=1]

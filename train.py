@@ -78,7 +78,12 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
                     input = Variable(input.cuda())
                     label = Variable(label.cuda())
                 else:
-                    input, label = Variable(input), Variable(label)
+                    input = Variable(input)
+                    label = Variable(label)
+
+                if phase == 'val':
+                    input.volatile = True
+                    label.volatile = True
 
                 optimizer.zero_grad()
 
