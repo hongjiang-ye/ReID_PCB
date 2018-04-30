@@ -10,18 +10,7 @@ from torchvision import datasets, transforms
 from sklearn.metrics import average_precision_score
 
 from model import PCBModel
-from utils import *
-
-
-# ---------------------- Settings ----------------------
-parser = argparse.ArgumentParser(description='Testing arguments')
-parser.add_argument('--which_epoch', default='final',
-                    type=str, help='0,1,2,3...or final')
-parser.add_argument('--dataset', type=str, default='market1501',
-                    choices=['market1501', 'cuhk03', 'duke'])
-parser.add_argument('--batch_size', default=128, type=int, help='batchsize')
-
-arg = parser.parse_args()
+import utils
 
 
 # ---------------------- Extract features ----------------------
@@ -48,37 +37,48 @@ def fliplr(img):
     return img_flip
 
 
-def extract_feature(model, dataloaders):
-    model.eval()
+def extract_feature(model, inputs, requires_norm, vectorize, requires_grad=False):
 
-    features = []
-    for data in dataloaders:
-        img, _ = data
+    # Move to model's device
+    inputs = inputs.to(next(model.parameters()).device)
 
-        if USE_GPU:
-            input_img = Variable(img.cuda(), volatile=True)
-        else:
-            input_img = Variable(img, volatile=True)
+    with torch.set_grad_enabled(requires_grad):
+        features = model(inputs)
 
-        output = model(input_img)
-        # [N, C, H=S, W=1]
-        feature = model.features_H.data.cpu().numpy()
+    size = features.shape
 
+    if requires_norm:
         # [N, C*H]
-        feature = feature.reshape(len(feature), -1)
+        features = features.view(size[0], -1)
 
         # norm feature
-        fnorm = np.linalg.norm(feature, axis=1)
-        feature = np.divide(feature, fnorm.reshape(len(fnorm), 1))
-        features.append(feature)
+        fnorm = features.norm(p=2, dim=1)
+        features = features.div(fnorm.unsqueeze(dim=1))
 
-    features = np.vstack(features)
+    if vectorize:
+        features = features.view(size[0], -1)
+    else:
+        # Back to [N, C, H=S]
+        features = features.view(size)
 
     return features
 
 
 # ---------------------- Evaluation ----------------------
 def evaluate(query_features, query_labels, query_cams, gallery_features, gallery_labels, gallery_cams):
+    """Evaluate the CMC and mAP
+
+    Arguments:
+        query_features {np.ndarray of size NxC} -- Features of probe images
+        query_labels {np.ndarray of query size N} -- Labels of probe images
+        query_cams {np.ndarray of query size N} -- Cameras of probe images
+        gallery_features {np.ndarray of size N'xC} -- Features of gallery images
+        gallery_labels {np.ndarray of gallery size N'} -- Lables of gallery images
+        gallery_cams {np.ndarray of gallery size N'} -- Cameras of gallery images
+
+    Returns:
+        (torch.IntTensor, float) -- CMC list, mAP
+    """
 
     CMC = torch.IntTensor(len(gallery_labels)).zero_()
     AP = 0
@@ -123,50 +123,73 @@ def evaluate(query_features, query_labels, query_cams, gallery_features, gallery
             CMC[first_match_index:] += 1
 
     CMC = CMC.float()
-    CMC = CMC / len(query_labels)  # average CMC
-    mAP = AP / len(query_labels)
+    CMC = CMC / len(query_labels) * 100  # average CMC
+    mAP = AP / len(query_labels) * 100
 
     return CMC, mAP
 
 
 # ---------------------- Start testing ----------------------
-data_transforms = transforms.Compose([
-    transforms.Resize((384, 128), interpolation=3),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
+def test(model, dataset, batch_size):
+    model.eval()
 
-image_datasets = {x: datasets.ImageFolder(os.path.join(DATASET_PATH[arg.dataset], x), data_transforms)
-                  for x in ['gallery', 'query']}
-dataloaders = {x: torch.utils.data.DataLoader(
-    image_datasets[x], batch_size=arg.batch_size, shuffle=False, num_workers=4) for x in ['gallery', 'query']}
+    gallery_dataloader = utils.getDataLoader(
+        dataset, batch_size, 'gallery', shuffle=False, augment=False)
+    query_dataloader = utils.getDataLoader(
+        dataset, batch_size, 'query', shuffle=False, augment=False)
 
-USE_GPU = torch.cuda.is_available()
+    gallery_cams, gallery_labels = get_cam_label(
+        gallery_dataloader.dataset.imgs)
+    query_cams, query_labels = get_cam_label(query_dataloader.dataset.imgs)
 
+    # Extract feature
+    gallery_features = []
+    query_features = []
 
-gallery_path = image_datasets['gallery'].imgs
-query_path = image_datasets['query'].imgs
+    for inputs, _ in gallery_dataloader:
+        gallery_features.append(extract_feature(
+            model, inputs, requires_norm=True, vectorize=True).cpu().data)
+    gallery_features = torch.cat(gallery_features, dim=0).numpy()
 
-gallery_cams, gallery_labels = get_cam_label(gallery_path)
-query_cams, query_labels = get_cam_label(query_path)
+    for inputs, _ in query_dataloader:
+        query_features.append(extract_feature(
+            model, inputs, requires_norm=True, vectorize=True).cpu().data)
+    query_features = torch.cat(query_features, dim=0).numpy()
 
-model_structure = PCBModel(TRAINING_IDS[arg.dataset])
-model = load_network(model_structure, arg.dataset, arg.which_epoch)
-
-# Remove the final fc layer and classifier layer
-for i in range(len(model.fc_list)):
-    model.fc_list[i] = nn.Sequential()
-
-# Change to test mode
-model = model.eval()
-if USE_GPU:
-    model = model.cuda()
-
-# Extract feature
-gallery_features = extract_feature(model, dataloaders['gallery'])
-query_features = extract_feature(model, dataloaders['query'])
+    return evaluate(query_features, query_labels, query_cams, gallery_features, gallery_labels, gallery_cams), gallery_features, query_features
 
 
-CMC, mAP = evaluate(query_features, query_labels, query_cams,
-                    gallery_features, gallery_labels, gallery_cams)
-print('top1:%f top5:%f top10:%f mAP:%f' % (CMC[0], CMC[4], CMC[9], mAP))
+# ---------------------- Testing settings ----------------------
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Testing arguments')
+    parser.add_argument('--save_path', type=str, default='./model')
+    parser.add_argument('--which_epoch', default='final',
+                        type=str, help='0,1,2,3...or final')
+    parser.add_argument('--dataset', type=str, default='market1501',
+                        choices=['market1501', 'cuhk03', 'duke'])
+    parser.add_argument('--batch_size', default=128,
+                        type=int, help='batchsize')
+    parser.add_argument('--share_conv', action='store_true')
+    arg = parser.parse_args()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    save_dir_path = os.path.join(arg.save_path, arg.dataset)
+    logger = utils.Logger(save_dir_path)
+    logger.info(vars(arg))
+
+    # Just to get the correct num_classes of classifier fc
+    train_dataloader = utils.getDataLoader(
+        arg.dataset, arg.batch_size, 'train')
+
+    model = utils.load_network(PCBModel(num_classes=len(train_dataloader.dataset.classes),
+                                        share_conv=arg.share_conv,
+                                        return_features=False),
+                               save_dir_path, arg.which_epoch)
+    model = model.to(device)
+    ((CMC, mAP), gallery_features, query_features) = test(
+        model, arg.dataset, arg.batch_size)
+
+    logger.info('Testing: top1:%.2f top5:%.2f top10:%.2f mAP:%.2f' %
+                (CMC[0], CMC[4], CMC[9], mAP))

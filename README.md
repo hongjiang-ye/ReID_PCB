@@ -2,7 +2,7 @@
 
 Implementation of PCB model of paper: *Beyond Part Models: Person Retrieval with Refined Part Pooling.*
 
-Using Python3.6 and Pytorch.
+Using Python3.6 and **Pytorch 4.0**.
 
 ## Start
 
@@ -32,11 +32,7 @@ Set the parameters by command line `--epochs 30` and specify the training datase
 python train.py --dataset {market1501, duke, cuhk03}
 ```
 
-The code will save the trained model at `./model/{dataset}`.
-
-![train_log](https://i.loli.net/2018/03/23/5ab4b6c101019.jpg)
-
-Using the hyperparameters from the paper, the loss converage at around 30th epoch. 
+![train_log](https://ws3.sinaimg.cn/large/006tKfTcgy1fquuibr5z4j30hs0dcwfc.jpg)
 
 ### Test
 
@@ -50,16 +46,19 @@ The code loads the trained model and extracts the features of testing data. CMC(
 
 ## Result
 
-Using the default settings (remember to add `--train_all` !), the results are:
+Using the default settings, the results are:
 
-|                        | Top1   | Top 5  | Top 10 | mAP    |
-| ---------------------- | ------ | ------ | ------ | ------ |
-| Market1501             | 91.51  | 96.91  | 98.01  | 75.81  |
-| *Market1501(Paper)*    | *92.4* | *97.0* | *97.9* | *77.3* |
-| DukeMTMC-reID          | 81.55  | 90.40  | 93.00  | 67.03  |
-| *DukeMTMC-reID(Paper)* | *81.9* | *89.4* | *91.6* | *65.3* |
-| CUHK03                 | 46.29  | 67.14  | 76.14  | 44.41  |
-| *CUHK03(paper)*        | *61.3* | *78.6* | *85.6* | *54.2* |
+|                                      | Top1   | Top 5  | Top 10 | mAP    |
+| ------------------------------------ | ------ | ------ | ------ | ------ |
+| Market1501 (share 1x1 conv)          | 91.51  | 96.91  | 98.01  | 75.81  |
+| Market1501 (independent 1x1 conv)    | 93.08  | 97.15  | 97.92  | 79.57  |
+| *Market1501(Paper)*                  | *92.4* | *97.0* | *97.9* | *77.3* |
+| DukeMTMC-reID (share 1x1 conv)       | 81.55  | 90.40  | 93.00  | 67.03  |
+| DukeMTMC-reID (independent 1x1 conv) | 83.80  | 91.61  | 93.90  | 70.66  |
+| *DukeMTMC-reID(Paper)*               | *81.9* | *89.4* | *91.6* | *65.3* |
+| CUHK03 (share 1x1 conv)              | 46.29  | 67.14  | 76.14  | 44.41  |
+| CUHK03 (independent 1x1 conv)        | 56.57  | 74.79  | 82.14  | 53.88  |
+| *CUHK03(paper)*                      | *61.3* | *78.6* | *85.6* | *54.2* |
 
 Testing results on CUHK03 are much lower than those reported on the paper. Maybe there are some differences between my implementation and the paper's, which are not detailed. Please inform me whatever you found useful.
 

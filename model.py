@@ -6,13 +6,13 @@ import numpy as np
 
 
 class PCBModel(nn.Module):
-    def __init__(self, num_classes, num_stripes=6, local_conv_out_channels=256):
+    def __init__(self, num_classes=100, num_stripes=6, share_conv=True, return_features=False):
 
         super(PCBModel, self).__init__()
         self.num_stripes = num_stripes
         self.num_classes = num_classes
-        self.features_G = []
-        self.features_H = []
+        self.share_conv = share_conv
+        self.return_features = return_features
 
         resnet = models.resnet50(pretrained=True)
         # Modifiy the stride of last conv layer
@@ -28,41 +28,63 @@ class PCBModel(nn.Module):
 
         # Add new layers
         self.avgpool = nn.AdaptiveAvgPool2d((self.num_stripes, 1))
-        self.local_conv = nn.Sequential(
-            nn.Conv2d(2048, local_conv_out_channels, 1),
-            nn.BatchNorm2d(local_conv_out_channels),
-            nn.ReLU(inplace=True))
+
+        if share_conv:
+            self.local_conv = nn.Sequential(
+                nn.Conv2d(2048, 256, kernel_size=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True))
+        else:
+            self.local_conv_list = nn.ModuleList()
+            for _ in range(num_stripes):
+                local_conv = nn.Sequential(
+                    nn.Conv1d(2048, 256, kernel_size=1),
+                    nn.BatchNorm1d(256),
+                    nn.ReLU(inplace=True))
+                self.local_conv_list.append(local_conv)
 
         # Classifier for each stripe
         self.fc_list = nn.ModuleList()
         for _ in range(num_stripes):
-            fc = nn.Sequential(
-                nn.Linear(local_conv_out_channels, num_classes))
-            # nn.Softmax())
+            fc = nn.Linear(256, num_classes)
 
-            # fc initialize
-            nn.init.normal(fc[0].weight, std=0.001)
-            nn.init.constant(fc[0].bias, 0)
+            nn.init.normal_(fc.weight, std=0.001)
+            nn.init.constant_(fc.bias, 0)
 
             self.fc_list.append(fc)
 
     def forward(self, x):
-        features = self.backbone(x)
+        resnet_features = self.backbone(x)
 
         # [N, C, H, W]
-        assert features.size(
+        assert resnet_features.size(
             2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
 
-        self.features_G = self.avgpool(features)
+        features_G = self.avgpool(resnet_features)
 
         # [N, C=256, H=S, W=1]
-        self.features_H = self.local_conv(self.features_G)
+        if self.share_conv:
+            features_H = self.local_conv(features_G)
+            features_H = [features_H[:, :, i, :]
+                          for i in range(self.num_stripes)]
+        else:
+            features_H = []
 
-        # H=S * [N, num_classes]
-        predicitions_list = []
-        for i in range(self.num_stripes):
-            local_feature = self.features_H[:, :, i, :].contiguous()
-            local_feature = local_feature.view(local_feature.size(0), -1)
-            predicitions_list.append(self.fc_list[i](local_feature))
+            for i in range(self.num_stripes):
+                stripe_features_H = self.local_conv_list[i](
+                    features_G[:, :, i, :])
+                features_H.append(stripe_features_H)
 
-        return predicitions_list
+        # Return the features_H
+        if self.return_features:
+            return torch.stack(features_H, dim=2)
+
+        # [N, C=num_classes]
+        batch_size = x.size(0)
+        logits_list = [self.fc_list[i](features_H[i].view(batch_size, -1))
+                       for i in range(self.num_stripes)]
+
+        return logits_list
+
+    def set_return_features(self, option):
+        self.return_features = option

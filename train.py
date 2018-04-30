@@ -13,104 +13,93 @@ from torch.autograd import Variable
 from torchvision import datasets, transforms
 
 from model import PCBModel
-from utils import *
+from test import test
+import utils
 
 
 # ---------------------- Settings ----------------------
 parser = argparse.ArgumentParser(description='Training arguments')
+parser.add_argument('--save_path', type=str, default='./model')
 parser.add_argument('--dataset', type=str, default='market1501',
                     choices=['market1501', 'cuhk03', 'duke'])
-parser.add_argument('--train_all', action='store_true',
-                    help='Use all training data. Set true when training the final model.')
-
-# Hyperparameters
-parser.add_argument('--seed', default=1, type=int, help='random seed')
 parser.add_argument('--batch_size', default=64, type=int, help='batch_size')
 parser.add_argument('--learning_rate', default=0.1, type=float,
                     help='FC params learning rate')
 parser.add_argument('--epochs', default=60, type=int,
                     help='The number of epochs to train')
+parser.add_argument('--share_conv', action='store_true')
 arg = parser.parse_args()
 
-torch.manual_seed(arg.seed)
-torch.cuda.manual_seed_all(arg.seed)
+# Fix random seed
+torch.manual_seed(1)
+torch.cuda.manual_seed_all(1)
 
-USE_GPU = torch.cuda.is_available()
-if not os.path.isdir('./model'):
-    os.mkdir('./model')
-    os.mkdir('./model/' + arg.dataset)
+# Make saving directory
+save_dir_path = os.path.join(arg.save_path, arg.dataset)
+os.makedirs(save_dir_path, exist_ok=True)
 
 
 # ---------------------- Train function ----------------------
-def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
+def train(model, criterion, optimizer, scheduler, dataloader, num_epochs, device):
 
     start_time = time.time()
 
     # Logger instance
-    logger = Logger(arg.dataset)
-
-    best_model_state = model.state_dict()
-    best_acc = 0.0
+    logger = utils.Logger(save_dir_path)
+    logger.info('-' * 10)
+    logger.info(vars(arg))
 
     for epoch in range(num_epochs):
-
         logger.info('Epoch {}/{}'.format(epoch + 1, num_epochs))
-        logger.x_epoch.append(epoch + 1)
 
-        # Each epoch has a training and validation phase
-        for phase in ['train', 'val']:
-            if phase == 'train':
-                scheduler.step()
-                model.train(True)  # Set model to training mode
-            else:
-                model.train(False)  # Set model to evaluate mode
+        model.train()
+        scheduler.step()
 
-            running_loss = 0.0
-            running_corrects = 0
+        # Training
+        running_loss = 0.0
+        batch_num = 0
+        for inputs, labels in dataloader:
+            batch_num += 1
 
-            batch_num = 0
-            for data in dataloaders[phase]:
-                batch_num += 1
+            inputs = inputs.to(device)
+            labels = labels.to(device)
 
-                input, label = data
+            optimizer.zero_grad()
 
-                if USE_GPU:
-                    input = Variable(input.cuda())
-                    label = Variable(label.cuda())
-                else:
-                    input = Variable(input)
-                    label = Variable(label)
+            # with torch.set_grad_enabled(True):
+            outputs = model(inputs)
 
-                if phase == 'val':
-                    input.volatile = True
-                    label.volatile = True
+            # Sum up the stripe softmax loss
+            loss = 0
+            for logits in outputs:
+                stripe_loss = criterion(logits, labels)
+                loss += stripe_loss
 
-                optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-                output = model(input)
+            running_loss += loss.item() * inputs.size(0)
 
-                # Compute PCB loss
-                loss = torch.sum(
-                    torch.cat([criterion(feat, label) for feat in output]))
-                # loss = criterion(output, label)
+        epoch_loss = running_loss / len(dataloader.dataset.imgs)
+        logger.info('Training Loss: {:.4f}'.format(epoch_loss))
 
-                # Backward only if in training phase
-                if phase == 'train':
-                    loss.backward()
-                    optimizer.step()
+        # Save result to logger
+        logger.x_epoch_loss.append(epoch + 1)
+        logger.y_train_loss.append(epoch_loss)
 
-                running_loss += loss.data[0]
+        if (epoch + 1) % 10 == 0 or epoch + 1 == num_epochs:
+            # Testing / Validating
+            model.set_return_features(True)
+            ((CMC, mAP), _, _) = test(model, arg.dataset, 32)
+            model.set_return_features(False)
+            logger.info('Testing: top1:%.2f top5:%.2f top10:%.2f mAP:%.2f' %
+                        (CMC[0], CMC[4], CMC[9], mAP))
 
-            epoch_loss = running_loss / batch_num
-
-            logger.info('{} Loss: {:.4f}'.format(phase, epoch_loss))
-
-            # Save result to logger
-            logger.y_loss[phase].append(epoch_loss)
-
-        last_model_state = model.state_dict()
-        if epoch % 20 == 19:
-            save_network(model, arg.dataset, epoch)
+            logger.x_epoch_test.append(epoch + 1)
+            logger.y_test['top1'].append(CMC[0])
+            logger.y_test['mAP'].append(mAP)
+            if epoch + 1 != num_epochs:
+                utils.save_network(model, save_dir_path, str(epoch + 1))
 
         logger.info('-' * 10)
 
@@ -122,70 +111,38 @@ def train(model, criterion, optimizer, scheduler, dataloaders, num_epochs):
         time_elapsed // 60, time_elapsed % 60))
 
     # Save final model weights
-    model.load_state_dict(last_model_state)
-    save_network(model, arg.dataset, 'final')
-    return model
-
-
-# ---------------------- Set dataloaders ----------------------
-transform_train_list = [
-    transforms.Resize(size=(384, 128), interpolation=3),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-]
-
-transform_val_list = [
-    transforms.Resize(size=(384, 128), interpolation=3),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-]
-
-data_transforms = {
-    'train': transforms.Compose(transform_train_list),
-    'val': transforms.Compose(transform_val_list),
-}
-
-
-image_datasets = {}
-image_datasets['train'] = datasets.ImageFolder(os.path.join(DATASET_PATH[arg.dataset], 'train' + ('_all' if arg.train_all else '')),
-                                               data_transforms['train'])
-image_datasets['val'] = datasets.ImageFolder(os.path.join(DATASET_PATH[arg.dataset], 'val'),
-                                             data_transforms['val'])
-
-dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=arg.batch_size,
-                                              shuffle=True, num_workers=4)
-               for x in ['train', 'val']}
+    utils.save_network(model, save_dir_path, 'final')
 
 
 # For debugging
 # inputs, classes = next(iter(dataloaders['train']))
 
-
 # ---------------------- Training settings ----------------------
-model = PCBModel(len(image_datasets['train'].classes))
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Use multiple GPUs
-if torch.cuda.device_count() > 1:
-    model_wraped = nn.DataParallel(model)
-else:
-    model_wraped = model
-
-if USE_GPU:
-    model_wraped = model_wraped.cuda()
+train_dataloader = utils.getDataLoader(
+    arg.dataset, arg.batch_size, 'train', shuffle=True, augment=True)
+model = PCBModel(num_classes=len(
+    train_dataloader.dataset.classes), share_conv=arg.share_conv, return_features=False)
 
 criterion = nn.CrossEntropyLoss()
 
 # Finetune the net
 optimizer = optim.SGD([
     {'params': model.backbone.parameters(), 'lr': arg.learning_rate / 10},
-    {'params': model.local_conv.parameters(), 'lr': arg.learning_rate},
+    {'params': model.local_conv.parameters() if arg.share_conv else model.local_conv_list.parameters(),
+     'lr': arg.learning_rate},
     {'params': model.fc_list.parameters(), 'lr': arg.learning_rate}
 ], momentum=0.9, weight_decay=5e-4, nesterov=True)
 
 scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
+# Use multiple GPUs
+if torch.cuda.device_count() > 1:
+    model = nn.DataParallel(model)
+
+model = model.to(device)
 
 # ---------------------- Start training ----------------------
-model = train(model_wraped, criterion, optimizer, scheduler, dataloaders,
-              arg.epochs)
+train(model, criterion, optimizer, scheduler, train_dataloader,
+      arg.epochs, device)
