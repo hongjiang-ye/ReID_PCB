@@ -54,7 +54,7 @@ Using the default settings, the results are:
 | Market1501 (independent 1x1 conv)    | 93.08  | 97.15  | 97.92  | 79.57  |
 | *Market1501(Paper)*                  | *92.4* | *97.0* | *97.9* | *77.3* |
 | DukeMTMC-reID (share 1x1 conv)       | 81.55  | 90.40  | 93.00  | 67.03  |
-| DukeMTMC-reID (independent 1x1 conv) | 83.80  | 91.61  | 93.90  | 70.66  |
+| DukeMTMC-reID (independent 1x1 conv) | 84.25  | 91.83  | 94.03  | 71.06  |
 | *DukeMTMC-reID(Paper)*               | *81.9* | *89.4* | *91.6* | *65.3* |
 | CUHK03 (share 1x1 conv)              | 46.29  | 67.14  | 76.14  | 44.41  |
 | CUHK03 (independent 1x1 conv)        | 56.57  | 74.79  | 82.14  | 53.88  |
