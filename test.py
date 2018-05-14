@@ -168,7 +168,7 @@ if __name__ == '__main__':
                         type=str, help='0,1,2,3...or final')
     parser.add_argument('--dataset', type=str, default='market1501',
                         choices=['market1501', 'cuhk03', 'duke'])
-    parser.add_argument('--batch_size', default=128,
+    parser.add_argument('--batch_size', default=256,
                         type=int, help='batchsize')
     parser.add_argument('--share_conv', action='store_true')
     arg = parser.parse_args()
@@ -185,7 +185,7 @@ if __name__ == '__main__':
 
     model = utils.load_network(PCBModel(num_classes=len(train_dataloader.dataset.classes),
                                         share_conv=arg.share_conv,
-                                        return_features=False),
+                                        return_features=True),
                                save_dir_path, arg.which_epoch)
     model = model.to(device)
     ((CMC, mAP), gallery_features, query_features) = test(
@@ -193,3 +193,5 @@ if __name__ == '__main__':
 
     logger.info('Testing: top1:%.2f top5:%.2f top10:%.2f mAP:%.2f' %
                 (CMC[0], CMC[4], CMC[9], mAP))
+
+    torch.cuda.empty_cache()

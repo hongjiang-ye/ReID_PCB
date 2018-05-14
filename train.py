@@ -147,3 +147,5 @@ model = model.to(device)
 # ---------------------- Start training ----------------------
 train(model, criterion, optimizer, scheduler, train_dataloader,
       arg.epochs, device)
+
+torch.cuda.empty_cache()
