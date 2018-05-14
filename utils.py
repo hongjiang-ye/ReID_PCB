@@ -15,9 +15,9 @@ DATASET_PATH = {
     'duke': '/home/share/hongjiang/DukeMTMC-reID/pytorch',
     'cuhk03': '/home/share/hongjiang/cuhk03_release/pytorch'}
 # DATASET_PATH = {
-#     'market1501': '/Users/ruby/Desktop/other_reid/Market-1501-v15.09.15/pytorch',
-#     'duke': '/Users/ruby/Desktop/other_reid/DukeMTMC-reID/pytorch',
-#     'cuhk03': '/Users/ruby/Desktop/other_reid/cuhk03_release/pytorch'}
+#     'market1501': '/Users/ruby/Desktop/Lab/others/Market-1501-v15.09.15/pytorch',
+#     'duke': '/Users/ruby/Desktop/Lab/others/DukeMTMC-reID/pytorch',
+#     'cuhk03': '/Users/ruby/Desktop/Lab/others/cuhk03_release/pytorch'}
 
 
 # ---------------------- Helper functions ----------------------

@@ -89,8 +89,9 @@ def train(model, criterion, optimizer, scheduler, dataloader, num_epochs, device
 
         if (epoch + 1) % 10 == 0 or epoch + 1 == num_epochs:
             # Testing / Validating
+            torch.cuda.empty_cache()
             model.set_return_features(True)
-            ((CMC, mAP), _, _) = test(model, arg.dataset, 32)
+            ((CMC, mAP), _, _) = test(model, arg.dataset, 256)
             model.set_return_features(False)
             logger.info('Testing: top1:%.2f top5:%.2f top10:%.2f mAP:%.2f' %
                         (CMC[0], CMC[4], CMC[9], mAP))
