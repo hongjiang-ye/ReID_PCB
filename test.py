@@ -82,6 +82,7 @@ def evaluate(query_features, query_labels, query_cams, gallery_features, gallery
 
     CMC = torch.IntTensor(len(gallery_labels)).zero_()
     AP = 0
+    sorted_index_list, sorted_y_true_list, junk_index_list = [], [], []
 
     for i in range(len(query_labels)):
         query_feature = query_features[i]
@@ -114,19 +115,28 @@ def evaluate(query_features, query_labels, query_cams, gallery_features, gallery
 
         # Compute CMC
         # Sort the sufficient index by their scores, from large to small
-        lexsort_index = np.argsort(y_score)
-        sorted_y_true = y_true[lexsort_index[::-1]]
+        sorted_index = np.argsort(y_score)[::-1]
+        sorted_y_true = y_true[sorted_index]
         match_index = np.argwhere(sorted_y_true == True)
 
         if match_index.size > 0:
             first_match_index = match_index.flatten()[0]
             CMC[first_match_index:] += 1
 
+        # keep with junk index, for using the index to show the img from dataloader
+        all_sorted_index = np.argsort(score)[::-1]
+        all_y_true = np.in1d(index, match_query_index)
+        all_sorted_y_true = all_y_true[all_sorted_index]
+
+        sorted_index_list.append(all_sorted_index)
+        sorted_y_true_list.append(all_sorted_y_true)
+        junk_index_list.append(junk_index)
+
     CMC = CMC.float()
     CMC = CMC / len(query_labels) * 100  # average CMC
     mAP = AP / len(query_labels) * 100
 
-    return CMC, mAP
+    return CMC, mAP, (sorted_index_list, sorted_y_true_list, junk_index_list)
 
 
 # ---------------------- Start testing ----------------------
@@ -151,12 +161,13 @@ def test(model, dataset, batch_size):
             model, inputs, requires_norm=True, vectorize=True).cpu().data)
     gallery_features = torch.cat(gallery_features, dim=0).numpy()
 
-    for inputs, _ in query_dataloader:
-        query_features.append(extract_feature(
-            model, inputs, requires_norm=True, vectorize=True).cpu().data)
-    query_features = torch.cat(query_features, dim=0).numpy()
+    CMC, mAP, (sorted_index_list, sorted_y_true_list, junk_index_list) = evaluate(
+        query_features, query_labels, query_cams, gallery_features, gallery_labels, gallery_cams)
 
-    return evaluate(query_features, query_labels, query_cams, gallery_features, gallery_labels, gallery_cams), gallery_features, query_features
+    rank_list_fig = utils.save_rank_list_img(
+        query_dataloader, gallery_dataloader, sorted_index_list, sorted_y_true_list, junk_index_list)
+
+    return CMC, mAP, rank_list_fig
 
 
 # ---------------------- Testing settings ----------------------
@@ -188,10 +199,10 @@ if __name__ == '__main__':
                                         return_features=True),
                                save_dir_path, arg.which_epoch)
     model = model.to(device)
-    ((CMC, mAP), gallery_features, query_features) = test(
-        model, arg.dataset, arg.batch_size)
+    CMC, mAP, rank_list_fig = test(model, arg.dataset, arg.batch_size)
 
     logger.info('Testing: top1:%.2f top5:%.2f top10:%.2f mAP:%.2f' %
                 (CMC[0], CMC[4], CMC[9], mAP))
+    logger.save_img(rank_list_fig)
 
     torch.cuda.empty_cache()

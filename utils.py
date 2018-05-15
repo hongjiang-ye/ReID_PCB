@@ -89,6 +89,70 @@ def getDataLoader(dataset, batch_size, part, shuffle=True, augment=True):
     return dataloader
 
 
+def save_rank_list_img(query_dataloader, gallery_dataloader, sorted_index_list, sorted_true_list, junk_index_list):
+
+    rank_lists_imgs = []
+
+    # randomly select 10 query images to show the rank list
+    query_index_list = list(range(len(sorted_index_list)))
+    random.shuffle(query_index_list)
+    selected_query_index = query_index_list[:10]
+
+    for i in selected_query_index:
+
+        cur_rank_list = []
+
+        query_img = query_dataloader.dataset[i][0]
+        query_img_with_boundary = torch.nn.functional.pad(
+            query_img, (3, 3, 3, 3), "constant", value=0)
+        cur_rank_list.append(query_img_with_boundary)
+
+        sorted_index = sorted_index_list[i]
+        sorted_true = sorted_true_list[i]
+        junk_index = junk_index_list[i]
+
+        # show the top 10(not junk) gallery images of the rank list
+        num = 0
+        idx = 0
+        while num < 10:
+            if sorted_index[idx] in junk_index:
+                idx += 1
+                continue
+
+            gallery_img = gallery_dataloader.dataset[sorted_index[idx]][0]
+
+            gallery_img_with_boundary = torch.nn.functional.pad(
+                gallery_img, (3, 3, 3, 3), "constant", value=0)
+
+            if sorted_true[idx]:
+                # True, with green boundary
+                gallery_img_with_boundary[1, :, :] = torch.nn.functional.pad(
+                    gallery_img[1, :, :], (3, 3, 3, 3), "constant", value=5)
+            else:
+                # False, with red boundary
+                gallery_img_with_boundary[0, :, :] = torch.nn.functional.pad(
+                    gallery_img[0, :, :], (3, 3, 3, 3), "constant", value=5)
+
+            cur_rank_list.append(gallery_img_with_boundary)
+            idx += 1
+            num += 1
+
+        cur_rank_list_img = torch.cat(cur_rank_list, dim=2)
+        cur_rank_list_img = torch.nn.functional.pad(
+            cur_rank_list_img, (1, 1, 0, 0), "constant", value=0)
+
+        rank_lists_imgs.append(cur_rank_list_img.numpy().transpose((1, 2, 0)))
+
+    fig = np.concatenate(rank_lists_imgs, axis=0)
+
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    fig = fig * std + mean
+    fig = np.clip(fig, 0, 1)
+
+    return fig
+
+
 # ---------------------- Logger ----------------------
 class Logger(logging.Logger):
     '''Inherit from logging.Logger.
@@ -140,3 +204,6 @@ class Logger(logging.Logger):
 
         save_path = os.path.join(self.dir_path, 'train_log.jpg')
         self.fig.savefig(save_path)
+
+    def save_img(self, fig):
+        plt.imsave(os.path.join(self.dir_path, 'rank_list.jpg'), fig)
