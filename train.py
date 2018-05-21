@@ -28,6 +28,7 @@ parser.add_argument('--learning_rate', default=0.1, type=float,
 parser.add_argument('--epochs', default=60, type=int,
                     help='The number of epochs to train')
 parser.add_argument('--share_conv', action='store_true')
+parser.add_argument('--stripes', type=int, default=6)
 arg = parser.parse_args()
 
 # Fix random seed
@@ -91,7 +92,7 @@ def train(model, criterion, optimizer, scheduler, dataloader, num_epochs, device
             # Testing / Validating
             torch.cuda.empty_cache()
             model.set_return_features(True)
-            ((CMC, mAP), _, _) = test(model, arg.dataset, 256)
+            CMC, mAP, _ = test(model, arg.dataset, 512)
             model.set_return_features(False)
             logger.info('Testing: top1:%.2f top5:%.2f top10:%.2f mAP:%.2f' %
                         (CMC[0], CMC[4], CMC[9], mAP))
@@ -123,8 +124,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 train_dataloader = utils.getDataLoader(
     arg.dataset, arg.batch_size, 'train', shuffle=True, augment=True)
-model = PCBModel(num_classes=len(
-    train_dataloader.dataset.classes), share_conv=arg.share_conv, return_features=False)
+model = PCBModel(num_classes=len(train_dataloader.dataset.classes),
+                 num_stripes=arg.stripes, share_conv=arg.share_conv, return_features=False)
 
 criterion = nn.CrossEntropyLoss()
 

@@ -161,6 +161,11 @@ def test(model, dataset, batch_size):
             model, inputs, requires_norm=True, vectorize=True).cpu().data)
     gallery_features = torch.cat(gallery_features, dim=0).numpy()
 
+    for inputs, _ in query_dataloader:
+        query_features.append(extract_feature(
+            model, inputs, requires_norm=True, vectorize=True).cpu().data)
+    query_features = torch.cat(query_features, dim=0).numpy()
+
     CMC, mAP, (sorted_index_list, sorted_y_true_list, junk_index_list) = evaluate(
         query_features, query_labels, query_cams, gallery_features, gallery_labels, gallery_cams)
 
@@ -179,7 +184,7 @@ if __name__ == '__main__':
                         type=str, help='0,1,2,3...or final')
     parser.add_argument('--dataset', type=str, default='market1501',
                         choices=['market1501', 'cuhk03', 'duke'])
-    parser.add_argument('--batch_size', default=256,
+    parser.add_argument('--batch_size', default=512,
                         type=int, help='batchsize')
     parser.add_argument('--share_conv', action='store_true')
     arg = parser.parse_args()
